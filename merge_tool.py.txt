@@ -1,0 +1,113 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+import pandas as pd
+import os
+import glob
+import threading
+
+class ExcelMergerTool:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("多表格合并工具 v1.0")
+        self.root.geometry("400x250")
+        
+        # 界面布局
+        self.create_widgets()
+
+    def create_widgets(self):
+        # 说明文字
+        info_label = tk.Label(
+            self.root, 
+            text="请将所有需要合并的 Excel 文件放在同一个文件夹内",
+            pady=20,
+            wraplength=350
+        )
+        info_label.pack()
+
+        # 选择文件夹按钮
+        self.btn_select = tk.Button(
+            self.root, 
+            text="1. 选择文件夹", 
+            command=self.start_merge_process,
+            bg="#dddddd",
+            font=("微软雅黑", 12, "bold"),
+            padx=20,
+            pady=10
+        )
+        self.btn_select.pack()
+
+        # 状态标签
+        self.status_label = tk.Label(self.root, text="就绪", fg="gray")
+        self.status_label.pack(pady=10)
+
+    def start_merge_process(self):
+        # 使用线程防止界面卡死
+        folder_path = filedialog.askdirectory(title="选择包含表格的文件夹")
+        if not folder_path:
+            return
+            
+        self.btn_select.config(state="disabled", text="正在处理...")
+        self.status_label.config(text="正在扫描并合并文件...", fg="blue")
+        self.root.update()
+        
+        # 在新线程中运行耗时操作
+        thread = threading.Thread(target=self.merge_logic, args=(folder_path,))
+        thread.start()
+
+    def merge_logic(self, folder_path):
+        try:
+            # 1. 查找所有 Excel 文件
+            all_files = glob.glob(os.path.join(folder_path, "*.xlsx")) + \
+                        glob.glob(os.path.join(folder_path, "*.xls"))
+            
+            if not all_files:
+                self.update_ui("未找到 Excel 文件！", "red")
+                return
+
+            df_list = []
+            success_count = 0
+
+            # 2. 循环读取
+            for file in all_files:
+                try:
+                    # 读取 Excel (默认读取第一个 sheet)
+                    df = pd.read_excel(file)
+                    
+                    # 添加来源列
+                    df['来源文件'] = os.path.basename(file)
+                    
+                    df_list.append(df)
+                    success_count += 1
+                except Exception as e:
+                    print(f"跳过文件 {file}: {e}")
+
+            # 3. 合并数据
+            if df_list:
+                final_df = pd.concat(df_list, ignore_index=True)
+                
+                # 生成输出文件名
+                output_file = os.path.join(folder_path, "合并结果_总表.xlsx")
+                
+                # 导出
+                final_df.to_excel(output_file, index=False)
+                
+                msg = f"合并成功！\n共处理 {success_count} 个文件\n总行数: {len(final_df)}\n保存在: {output_file}"
+                self.update_ui("完成", "green")
+                messagebox.showinfo("成功", msg)
+            else:
+                self.update_ui("没有有效数据被合并", "red")
+
+        except Exception as e:
+            self.update_ui("发生错误", "red")
+            messagebox.showerror("错误", str(e))
+        
+        finally:
+            self.btn_select.config(state="normal", text="1. 选择文件夹")
+
+    def update_ui(self, text, color):
+        self.status_label.config(text=text, fg=color)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ExcelMergerTool(root)
+    root.mainloop()
