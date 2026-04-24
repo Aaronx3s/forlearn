@@ -1,0 +1,23 @@
+name: Build EXE
+on: [push] # 每次推送代码自动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install Dependencies
+        run: |
+          pip install pandas openpyxl xlrd pyinstaller
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --noconsole --name "多表合并工具" merge_tool.py
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: my-app
+          path: dist/
